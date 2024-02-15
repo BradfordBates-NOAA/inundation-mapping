@@ -7,6 +7,7 @@ import dask
 
 URL = 's3://noaa-nwm-retro-v2-zarr-pds'
 
+
 def compute_max_flows(start_datetime, end_datetime, output_flow_file):
 
     if not os.access(os.path.dirname(output_flow_file), os.W_OK):
@@ -26,7 +27,7 @@ def compute_max_flows(start_datetime, end_datetime, output_flow_file):
     # Assuming var_max is a pandas Series after the .compute()
     df = var_max.to_pandas().to_frame(name='discharge')
 
-    print("Writing output: " + output_flow_file)
+    print("Writing discharge file: " + output_flow_file)
     df.to_csv(output_flow_file)
 
     print("Max flows generation complete.")

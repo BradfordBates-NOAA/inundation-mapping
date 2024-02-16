@@ -60,7 +60,7 @@ def compute_max_flows(start_datetime, end_datetime, output_flow_file, bounds="")
     #     ds = ds.where((ds.latitude >= new_lat_min) & (ds.latitude <= new_lat_max) & (ds.longitude >= new_lon_min) & (ds.longitude <= new_lon_max), drop=True)
     #     #ds = ds.sel(latitude=slice(lat_min, lat_max), longitude=slice(lon_min, lon_max))
 
-    print(ds)
+    #print(ds)
 
     # Get max streamflow
     print("Extracting max flows...")

@@ -70,18 +70,8 @@ def produce_mosaicked_inundation(
     if not os.path.exists(hydrofabric_dir):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), hydrofabric_dir)
 
-    # If the "hucs" argument is really one huc, convert it to a list
-    if os.path.exists(hucs[0]):
-        df = pd.read_csv(hucs[0])
-        huc_list = df['huc8'].tolist()
-    else:
-        huc_list = hucs
-
-    hucs = []
-    for huc in huc_list:
-        hucs.append(str(huc).zfill(8))
-
     # Check that huc folder exists in the hydrofabric_dir.
+    print(hucs)
     for huc in hucs:
         if not os.path.exists(os.path.join(hydrofabric_dir, huc)):
             raise FileNotFoundError(

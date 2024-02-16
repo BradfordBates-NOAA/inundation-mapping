@@ -4,11 +4,17 @@ import xarray as xr
 import fsspec
 import numpy as np
 import dask
+from pyproj import Transformer
 
-URL = 's3://noaa-nwm-retro-v2-zarr-pds'
+#s3://noaa-nwm-retrospective-2-1-pds/
+
+#URL = "s3://noaa-nwm-retrospective-2-1-zarr-pds/"
+URL = "s3://noaa-nwm-retrospective-2-1-zarr-pds/chrtout.zarr"
+
+#arn:aws:s3:::noaa-nwm-retrospective-2-1-zarr-pds
 
 
-def compute_max_flows(start_datetime, end_datetime, output_flow_file):
+def compute_max_flows(start_datetime, end_datetime, output_flow_file, bounds=""):
 
     if not os.access(os.path.dirname(output_flow_file), os.W_OK):
         print(f"You do not have permissions to write to the directory: " + os.path.dirname(output_flow_file))
@@ -16,6 +22,45 @@ def compute_max_flows(start_datetime, end_datetime, output_flow_file):
 
     print("Connecting to NWM Retro S3...")
     ds = xr.open_zarr(fsspec.get_mapper(URL, anon=True), consolidated=True)
+    #print(ds)
+    #quit()
+
+    # crs = ds.attrs.get('crs', None)
+    
+    # print(ds)
+    # print(bounds)
+    # print(f"CRS from global attributes: {crs}")
+    # #quit()
+    # #print(ds.coords)
+    # #print(ds.dims)
+    
+    # if len(bounds) == 4:
+    #     print("Filtering results to provided bounds...")
+    #     lon_min, lat_min, lon_max, lat_max = bounds
+
+    #     # Create a transformer to convert from EPSG:4326 to the specified LCC projection
+    #     print("Transforming bounding box coords...")
+    #     transformer_to_lcc = Transformer.from_proj(
+    #         proj_from='epsg:4326',  # Source CRS
+    #         proj_to="+proj=lcc +units=m +a=6370000.0 +b=6370000.0 +lat_1=30.0 +lat_2=60.0 +lat_0=40.0 +lon_0=-97.0 +x_0=0 +y_0=0 +k_0=1.0 +nadgrids=@"
+    #     )
+    #     print(lon_min)
+    #     print(lat_min)
+
+    #     new_lat_min, new_lon_min = transformer_to_lcc.transform(lat_min, lon_min)
+    #     new_lat_max, new_lon_max = transformer_to_lcc.transform(lat_max, lon_max)
+
+    #     print(lon_max)
+    #     print(lat_max)
+
+    #     print(new_lat_min)
+    #     print(new_lon_min)
+    #     print(new_lat_max)
+    #     print(new_lon_max)
+    #     ds = ds.where((ds.latitude >= new_lat_min) & (ds.latitude <= new_lat_max) & (ds.longitude >= new_lon_min) & (ds.longitude <= new_lon_max), drop=True)
+    #     #ds = ds.sel(latitude=slice(lat_min, lat_max), longitude=slice(lon_min, lon_max))
+
+    print(ds)
 
     # Get max streamflow
     print("Extracting max flows...")

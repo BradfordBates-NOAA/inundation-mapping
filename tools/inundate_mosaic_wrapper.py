@@ -1,6 +1,7 @@
 import argparse
 import errno
 import os
+import pandas as pd
 from timeit import default_timer as timer
 
 from inundate_gms import Inundate_gms
@@ -70,8 +71,15 @@ def produce_mosaicked_inundation(
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), hydrofabric_dir)
 
     # If the "hucs" argument is really one huc, convert it to a list
-    if type(hucs) is str:
-        hucs = [hucs]
+    if os.path.exists(hucs[0]):
+        df = pd.read_csv(hucs[0])
+        huc_list = df['huc8'].tolist()
+    else:
+        huc_list = hucs
+
+    hucs = []
+    for huc in huc_list:
+        hucs.append(str(huc).zfill(8))
 
     # Check that huc folder exists in the hydrofabric_dir.
     for huc in hucs:
@@ -155,7 +163,7 @@ if __name__ == "__main__":
         type=str,
     )
     parser.add_argument(
-        "-u", "--hucs", help="List of HUCS to run", required=True, default="", type=str, nargs="+"
+        "-u", "--hucs", help="List of HUCS to run, or a CSV with huc8 as the header.", required=True, default="", type=str, nargs="+"
     )
     parser.add_argument(
         "-f",

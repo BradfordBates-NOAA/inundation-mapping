@@ -3,6 +3,7 @@ import argparse
 from timeit import default_timer as timer
 import pandas as pd
 import geopandas as gpd
+from concurrent.futures import ProcessPoolExecutor, as_completed, wait
 
 from inundate_mosaic_wrapper import produce_mosaicked_inundation
 from get_nwm_max_flows_retro import compute_max_flows
@@ -48,38 +49,109 @@ def make_nwm_retro_fim(
     map_filename=None,
     mask=None,
     unit_attribute_name="huc8",
-    num_workers=1,
+    branch_workers=1,
+    huc_workers=1,
     remove_intermediate=True,
     verbose=False,
     is_mosaic_for_branches=False,
     watershed_boundary_gpkg=r'/data/inputs/wbd/WBD_National.gpkg'
 ):
 
-    bounds = get_bounds_from_hucs(hucs, watershed_boundary_gpkg)
+    # Check job numbers and raise error if necessary
+    total_cpus_requested = branch_workers * huc_workers
+    total_cpus_available = os.cpu_count() - 1
+    if total_cpus_requested > total_cpus_available:
+        raise ValueError(
+            'The HUC job number, {}, multiplied by the inundate job number, {}, '
+            'exceeds your machine\'s available CPU count minus one: {}. '
+            'Please lower the job_number_huc or job_number_inundate '
+            'values accordingly.'.format(huc_workers, branch_workers, total_cpus_available)
+        )
+
+    #bounds = get_bounds_from_hucs(hucs, watershed_boundary_gpkg)
+    bounds = []
+    # Build list of HUCs to process
+    if os.path.exists(hucs[0]):
+        df = pd.read_csv(hucs[0])
+        huc_list = df['huc8'].tolist()
+    else:
+        huc_list = hucs
+    huc_list_zfill = []
+    for huc in huc_list:
+        huc_list_zfill.append(str(huc).zfill(8))
 
     # TODO allow for a dataframe to be returned instead of writing to CSV and reading back in
     flow_file = os.path.join(os.path.dirname(inundation_polygon), ((start_datetime + end_datetime).replace('-','_').replace(':','_').replace(' ','')) + '.csv')
     compute_max_flows(start_datetime, end_datetime, flow_file, bounds)
 
+    inundation_polygons_to_merge = []
+    inundation_tifs_to_merge = []
+    depths_tifs_to_merge = []
+
+    inundation_polygon_huc, inundation_raster_huc, depths_raster_huc = None, None, None
+
+    
     print("Generating inundation map with max flow data...")
-    produce_mosaicked_inundation(
-        hydrofabric_dir,
-        hucs,
-        flow_file,
-        inundation_raster,
-        inundation_polygon,
-        depths_raster,
-        map_filename,
-        mask,
-        unit_attribute_name,
-        num_workers,
-        remove_intermediate,
-        verbose,
-        is_mosaic_for_branches
-        )
+    with ProcessPoolExecutor(max_workers=huc_workers) as executor:
+        for huc in huc_list_zfill:
+            if '.gpkg' in inundation_polygon:
+                inundation_polygon_huc = inundation_polygon.replace('.gpkg', f'_{huc}_mosaic.gpkg')
+                inundation_polygons_to_merge.append(inundation_polygon_huc)
+            
+            if '.shp' in inundation_polygon:
+                inundation_polygon_huc = inundation_polygon.replace('.shp', f'_{huc}_mosiac.shp')
+                inundation_polygons_to_merge.append(inundation_polygon_huc)
+
+            if inundation_raster != None:
+                inundation_raster_huc = inundation_raster.replace('.tif', f'_{huc}_mosaic.tif')
+                inundation_tifs_to_merge.append(inundation_raster_huc)
+            
+            if depths_raster != None:
+                depths_raster_huc = depths_raster.replace('.tif', f'_{huc}_mosaic.tif')
+                depths_tifs_to_merge.append(depths_raster_huc)
+
+    #         produce_mosaicked_inundation(
+    #                 hydrofabric_dir,
+    #                 [huc],
+    #                 flow_file,
+    #                 inundation_raster_huc,
+    #                 inundation_polygon_huc,
+    #                 depths_raster_huc,
+    #                 map_filename,
+    #                 mask,
+    #                 unit_attribute_name,
+    #                 branch_workers,
+    #                 remove_intermediate,
+    #                 verbose,
+    #                 is_mosaic_for_branches
+    # )
+                    
+            executor.submit(
+                produce_mosaicked_inundation,
+                hydrofabric_dir,
+                [huc],
+                flow_file,
+                inundation_raster_huc,
+                inundation_polygon_huc,
+                depths_raster_huc,
+                map_filename,
+                mask,
+                unit_attribute_name,
+                branch_workers,
+                remove_intermediate,
+                verbose,
+                is_mosaic_for_branches
+            )
+    
+    # Final step: merge all polygons, tifs, and depth grids into respective files.
+    # Read each GeoPackage into a list of GeoDataFrames
+    print("Merging all mosaicked polygons...")
+    gdfs = [gpd.read_file(polygon) for polygon in inundation_polygons_to_merge]
+    merged_gdf = pd.concat(gdfs, ignore_index=True)
+    merged_gdf.to_file(inundation_polygon, driver='GPKG')
 
     print("Inundation mapping for max flows over specified time period is complete.")
-    
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Produce CSV flow files from NWM 2.1 Retrospective.')
@@ -148,7 +220,8 @@ if __name__ == '__main__':
         default="huc8",
         type=str,
     )
-    parser.add_argument("-w", "--num-workers", help="Number of workers.", required=False, default=1, type=int)
+    parser.add_argument("-bw", "--branch-workers", help="Number of concurrent branch jobs.", required=False, default=1, type=int)
+    parser.add_argument("-hw", "--huc-workers", help="Number of concurrent HUCs to process.", required=False, default=1, type=int)
     parser.add_argument(
         "-r",
         "--remove-intermediate",
